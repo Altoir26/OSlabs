@@ -8,9 +8,15 @@
 // Глобальный массив
 int shared_array[ARRAY_SIZE];
 
-// Мьютекс и условная переменная
-pthread_mutex_t mutex;
+// Блокировка чтения-записи
+pthread_rwlock_t rwlock;
+
+// Условная переменная и мьютекс
 pthread_cond_t condvar;
+pthread_mutex_t cond_mutex;
+
+// Флаг, указывающий, что данные обновлены
+int data_updated = 0;
 
 // Индекс записи для пишущего потока
 int write_index = 0;
@@ -18,7 +24,8 @@ int write_index = 0;
 // Функция для пишущего потока
 void* writer_thread(void* arg) {
     while (1) {
-        pthread_mutex_lock(&mutex);  // Захват мьютекса
+        // Захватываем блокировку на запись
+        pthread_rwlock_wrlock(&rwlock);
 
         // Записываем текущее значение индекса в массив
         if (write_index < ARRAY_SIZE) {
@@ -27,12 +34,16 @@ void* writer_thread(void* arg) {
             write_index++;
         }
 
-        // Сигнализируем читающим потокам, что данные изменились
-        pthread_cond_broadcast(&condvar);
+        // Устанавливаем флаг обновления данных
+        pthread_mutex_lock(&cond_mutex);
+        data_updated = 1;
+        pthread_cond_broadcast(&condvar);  // Сигнализируем читающим потокам
+        pthread_mutex_unlock(&cond_mutex);
 
-        pthread_mutex_unlock(&mutex);  // Освобождение мьютекса
+        // Освобождаем блокировку на запись
+        pthread_rwlock_unlock(&rwlock);
 
-        sleep(1);  // Ждем немного перед следующим записыванием
+        sleep(1);  // Ждем немного перед следующей записью
     }
 
     return NULL;
@@ -43,10 +54,15 @@ void* reader_thread(void* arg) {
     int tid = *((int*)arg);  // Получаем ID потока
 
     while (1) {
-        pthread_mutex_lock(&mutex);  // Захват мьютекса
+        // Ждем, пока данные не будут обновлены
+        pthread_mutex_lock(&cond_mutex);
+        while (!data_updated) {  // Проверяем флаг обновления
+            pthread_cond_wait(&condvar, &cond_mutex);
+        }
+        pthread_mutex_unlock(&cond_mutex);
 
-        // Ждем, пока пишущий поток что-то запишет
-        pthread_cond_wait(&condvar, &mutex);
+        // Захватываем блокировку на чтение
+        pthread_rwlock_rdlock(&rwlock);
 
         // Выводим текущее состояние массива
         printf("Reader %d: Array state: ", tid);
@@ -55,9 +71,13 @@ void* reader_thread(void* arg) {
         }
         printf("\n");
 
-        pthread_mutex_unlock(&mutex);  // Освобождение мьютекса
+        // Освобождаем блокировку на чтение
+        pthread_rwlock_unlock(&rwlock);
 
-        sleep(1);  // Ждем немного перед следующим чтением
+        // Сбрасываем флаг обновления только один раз после чтения
+        pthread_mutex_lock(&cond_mutex);
+        data_updated = 0;
+        pthread_mutex_unlock(&cond_mutex);
     }
 
     return NULL;
@@ -68,9 +88,10 @@ int main() {
     pthread_t readers[10];
     int reader_ids[10];
 
-    // Инициализация мьютекса и условной переменной
-    pthread_mutex_init(&mutex, NULL);
+    // Инициализация блокировки чтения-записи, условной переменной и мьютекса
+    pthread_rwlock_init(&rwlock, NULL);
     pthread_cond_init(&condvar, NULL);
+    pthread_mutex_init(&cond_mutex, NULL);
 
     // Создаем писательский поток
     pthread_create(&writer, NULL, writer_thread, NULL);
@@ -88,8 +109,9 @@ int main() {
     }
 
     // Освобождаем ресурсы
-    pthread_mutex_destroy(&mutex);
+    pthread_rwlock_destroy(&rwlock);
     pthread_cond_destroy(&condvar);
+    pthread_mutex_destroy(&cond_mutex);
 
     return 0;
 }

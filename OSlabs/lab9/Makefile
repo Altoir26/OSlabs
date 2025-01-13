@@ -1,24 +1,13 @@
-
 CC = gcc
 CFLAGS = -Wall -g
 
-# Исходные файлы
-SENDER_SRC = sender.c
-RECEIVER_SRC = receiver.c
+all: sender receiver
 
-# Исполняемые файлы
-SENDER_BIN = sender
-RECEIVER_BIN = receiver
+sender: sender.c
+	$(CC) $(CFLAGS) -o sender sender.c
 
-# Правила для сборки
-all: $(SENDER_BIN) $(RECEIVER_BIN)
+receiver: receiver.c
+	$(CC) $(CFLAGS) -o receiver receiver.c
 
-$(SENDER_BIN): $(SENDER_SRC)
-	$(CC) $(CFLAGS) -o $(SENDER_BIN) $(SENDER_SRC)
-
-$(RECEIVER_BIN): $(RECEIVER_SRC)
-	$(CC) $(CFLAGS) -o $(RECEIVER_BIN) $(RECEIVER_SRC)
-
-# Очистка
 clean:
-	rm -f $(SENDER_BIN) $(RECEIVER_BIN)
+	rm -f sender receiver

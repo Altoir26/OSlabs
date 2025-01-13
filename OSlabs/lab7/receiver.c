@@ -4,10 +4,12 @@
 #include <unistd.h>
 #include <time.h>
 #include <string.h>
+#include <fcntl.h>     // Для O_RDWR
+#include <sys/mman.h>  // Для mmap, munmap, shm_open
 #include <sys/types.h>
-#include <fcntl.h>  // Добавлен для определения флагов O_WRONLY, O_RDONLY
 
-#define PIPE_NAME "/tmp/my_pipe"
+#define SHM_NAME "/my_shared_memory" // Имя разделяемой памяти
+#define SHM_SIZE 4096                // Размер разделяемой памяти (4 KB)
 
 // Структура для получения данных
 struct shared_data {
@@ -17,36 +19,37 @@ struct shared_data {
 };
 
 int main() {
-    // Открытие канала для чтения
-    int pipe_fd = open(PIPE_NAME, O_RDONLY);
-    if (pipe_fd == -1) {
-        perror("open failed");
+    // Подключаемся к существующей разделяемой памяти
+    int shm_fd = shm_open(SHM_NAME, O_RDWR, 0666);
+    if (shm_fd == -1) {
+        perror("Error: shared memory does not exist or cannot be accessed");
         exit(1);
     }
 
-    struct shared_data data;
-    
+    // Подключаем разделяемую память
+    void *shm_ptr = mmap(0, SHM_SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+    if (shm_ptr == MAP_FAILED) {
+        perror("mmap failed");
+        exit(1);
+    }
+
+    struct shared_data *data = (struct shared_data *)shm_ptr;
+
     // Бесконечный цикл приема данных
     while (1) {
-        // Чтение данных из канала
-        if (read(pipe_fd, &data, sizeof(data)) == -1) {
-            perror("read failed");
-            close(pipe_fd);
-            exit(1);
-        }
-
-        // Преобразуем время в строку
+        // Читаем данные из разделяемой памяти
         char time_str[100];
-        struct tm *tm_info = localtime(&(data.current_time));
+        struct tm *tm_info = localtime(&(data->current_time));
         strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
 
-        // Вывод данных на экран
-        printf("Receiver PID: %d, Current Time: %s, Message: %s\n", getpid(), time_str, data.message);
+        // Выводим данные на экран
+        printf("Receiver PID: %d, Current Time: %s, Sender PID: %d, Message: %s\n",
+               getpid(), time_str, data->pid, data->message);
 
         sleep(1); // Задержка 1 секунда
     }
 
-    // Закрытие канала
-    close(pipe_fd);
+    // Отключаем разделяемую память
+    munmap(shm_ptr, SHM_SIZE);
     return 0;
 }

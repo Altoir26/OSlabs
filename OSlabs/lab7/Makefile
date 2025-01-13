@@ -15,11 +15,11 @@ RECEIVER_BIN = receiver
 all: $(SENDER_BIN) $(RECEIVER_BIN)
 
 $(SENDER_BIN): $(SENDER_SRC)
-	$(CC) $(CFLAGS) -o $(SENDER_BIN) $(SENDER_SRC)
+	$(CC) $(CFLAGS) -o $(SENDER_BIN) $(SENDER_SRC) -lrt
 
 $(RECEIVER_BIN): $(RECEIVER_SRC)
-	$(CC) $(CFLAGS) -o $(RECEIVER_BIN) $(RECEIVER_SRC)
+	$(CC) $(CFLAGS) -o $(RECEIVER_BIN) $(RECEIVER_SRC) -lrt
 
 # Очистка
 clean:
-	rm -f $(SENDER_BIN) $(RECEIVER_BIN) /tmp/my_pipe
+	rm -f $(SENDER_BIN) $(RECEIVER_BIN)
